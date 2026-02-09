@@ -49,8 +49,6 @@ A modern, full-stack stock analysis application combining real-time market data 
 
 ## 🎯 Demo
 
-🔗 **[Live Demo](https://your-deployed-url.vercel.app)** *(Add after deployment)*
-
 ### Screenshots
 
 *Coming soon - Screenshots of dashboard, charts, and AI analysis*
