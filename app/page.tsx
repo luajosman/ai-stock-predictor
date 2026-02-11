@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { StockSearch } from '@/components/stock-search';
 import { StockStats } from '@/components/stock-stats';
-import { TradingViewChart } from '@/components/tradingview-chart';
+import { TradingViewWidget } from '@/components/tradingview-widget';
 import { AIAnalyst } from '@/components/ai-analyst';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -13,7 +13,6 @@ import { TrendingUp, Sparkles, BarChart3 } from 'lucide-react';
 interface StockData {
   quote: any;
   profile: any;
-  chartData: Array<{ time: string; value: number }>;
 }
 
 export default function Home() {
@@ -23,15 +22,18 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   const handleSearch = async (searchSymbol: string) => {
+    const cleanedSymbol = (searchSymbol || '').toUpperCase().trim();
+    if (!cleanedSymbol) return;
+
     setIsLoading(true);
     setError(null);
-    setSymbol(searchSymbol);
+    setSymbol(cleanedSymbol);
 
     try {
-      const response = await fetch(`/api/stocks/${searchSymbol}`);
+      const response = await fetch(`/api/stocks/${encodeURIComponent(cleanedSymbol)}`);
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || 'Failed to fetch stock data');
       }
 
@@ -61,7 +63,7 @@ export default function Home() {
               </div>
               <div>
                 <h1 className="text-xl font-bold">Stock Predictor</h1>
-                <p className="text-xs text-muted-foreground">AI-Powered Analysis</p>
+                <p className="text-xs text-muted-foreground">AI-Powered Global Markets</p>
               </div>
             </motion.div>
 
@@ -119,11 +121,7 @@ export default function Home() {
               </TabsList>
 
               <TabsContent value="chart" className="mt-6">
-                <TradingViewChart
-                  data={stockData?.chartData || []}
-                  isLoading={isLoading}
-                  symbol={symbol}
-                />
+                {symbol && <TradingViewWidget symbol={symbol} isLoading={isLoading} />}
               </TabsContent>
 
               <TabsContent value="analysis" className="mt-6">
@@ -158,27 +156,9 @@ export default function Home() {
 
             <h2 className="text-3xl font-bold">Welcome to Stock Predictor</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto text-lg">
-              Search for any stock symbol to view professional TradingView charts, real-time data, and get AI-powered
-              market analysis from Claude.
+              Search stocks from <strong>global markets</strong> including US, Germany, Switzerland, France, Japan, and Hong Kong. 
+              View professional TradingView charts and get AI-powered analysis from Claude.
             </p>
-
-            <div className="flex gap-2 justify-center flex-wrap pt-4">
-              <span className="text-sm text-muted-foreground">Try popular stocks:</span>
-              {['AAPL', 'GOOGL', 'TSLA', 'NVDA'].map((sym, i) => (
-                <motion.button
-                  key={sym}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => handleSearch(sym)}
-                  className="px-6 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm"
-                >
-                  {sym}
-                </motion.button>
-              ))}
-            </div>
           </motion.div>
         )}
       </main>
@@ -212,7 +192,7 @@ export default function Home() {
               rel="noopener noreferrer"
               className="underline hover:text-foreground transition-colors font-medium"
             >
-              TradingView Charts
+              TradingView
             </a>
           </p>
           <p className="mt-2 text-xs">For educational purposes only. Not financial advice.</p>
