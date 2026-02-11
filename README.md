@@ -8,6 +8,41 @@ Professional stock analysis web app with resilient market-data APIs, interactive
 - Chart ranges are available for: `24H`, `1W`, `1M`, `3M`, `6M`, `1Y`, `5Y`.
 - Chart types are available for: `Area`, `Line`, `Candlestick`.
 
+## ✅ Feature Checklist
+
+- [x] Stock search with autocomplete suggestions and quick-pick symbols
+- [x] Quote + profile loading with provider fallback (`Finnhub` -> `Twelve Data`)
+- [x] Historical candles with fallback chain (`Finnhub` -> `Twelve Data` -> `Alpha Vantage`)
+- [x] Chart modes: `Area`, `Line`, `Candlestick`
+- [x] Chart ranges: `24H`, `1W`, `1M`, `3M`, `6M`, `1Y`, `5Y`
+- [x] Fullscreen chart support
+- [x] Dark mode
+- [x] AI analysis endpoint with Claude (`POST /api/analysis`)
+- [x] TradingView UDF-compatible API routes (`/api/tv/*`)
+
+## 🎯 Goals
+
+### Short-Term Goals
+
+- [ ] Add stock watchlist with local persistence
+- [ ] Improve API observability (provider metrics, error surface, latency)
+- [ ] Add integration tests for search/quote/candle fallback behavior
+- [ ] Improve chart empty/error states with clearer user guidance
+
+### Mid-Term Goals
+
+- [ ] Add technical indicators (SMA/EMA/RSI/MACD) to charting
+- [ ] Add stock comparison mode (multiple symbols in one view)
+- [ ] Add market news context for selected symbols
+- [ ] Add optional realtime price refresh/polling strategy tuning
+
+### Long-Term Goals
+
+- [ ] Add authentication and user-specific preferences
+- [ ] Add persistent portfolios and position tracking
+- [ ] Add alerts/notifications for price thresholds and volatility
+- [ ] Support multiple data-provider profiles and environment-based routing
+
 ## ✨ Features
 
 ### 📊 Market Data
