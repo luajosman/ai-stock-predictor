@@ -1,16 +1,16 @@
-# Stock Predictor
+# 📈 Stock Predictor
 
 Professional stock analysis web app with resilient market-data APIs, interactive charts, and AI-assisted commentary.
 
-## Current Status
+## 🚀 Current Status
 
 - Search, quote, and chart pipelines are running with provider fallbacks.
 - Chart ranges are available for: `24H`, `1W`, `1M`, `3M`, `6M`, `1Y`, `5Y`.
 - Chart types are available for: `Area`, `Line`, `Candlestick`.
 
-## Features
+## ✨ Features
 
-### Market Data
+### 📊 Market Data
 
 - Autocomplete stock search with keyboard navigation and quick-select symbols.
 - Quote + profile loading with fallback chain:
@@ -19,7 +19,7 @@ Professional stock analysis web app with resilient market-data APIs, interactive
   - `Finnhub` -> `Twelve Data` -> `Alpha Vantage`
 - In-memory response caching on API routes to reduce rate-limit pressure.
 
-### Charts
+### 📉 Charts
 
 - Interactive price chart powered by `lightweight-charts`.
 - Area/Line/Candlestick views.
@@ -27,19 +27,19 @@ Professional stock analysis web app with resilient market-data APIs, interactive
 - Historical ranges:
   - `24H`, `1W`, `1M`, `3M`, `6M`, `1Y`, `5Y`
 
-### AI Analysis
+### 🤖 AI Analysis
 
 - Claude-powered stock Q&A in the analysis tab.
 - Endpoint: `POST /api/analysis`
 
-### UI/UX
+### 🎨 UI/UX
 
 - Next.js App Router + TypeScript.
 - Tailwind + shadcn/ui components.
 - Dark mode support.
 - Motion transitions via Framer Motion.
 
-## Tech Stack
+## 🧰 Tech Stack
 
 - Next.js 14
 - TypeScript 5
@@ -48,14 +48,14 @@ Professional stock analysis web app with resilient market-data APIs, interactive
 - lightweight-charts
 - Anthropic SDK
 
-## Setup
+## ⚙️ Setup
 
-### Prerequisites
+### ✅ Prerequisites
 
 - Node.js 18+
 - npm
 
-### Install & Run
+### ▶️ Install & Run
 
 ```bash
 npm install
@@ -64,7 +64,7 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-## Environment Variables
+## 🔐 Environment Variables
 
 Create `/Users/luajosman/Desktop/stock-predictor/.env.local` and add keys as needed:
 
@@ -80,7 +80,7 @@ ALPHAVANTAGE_API_KEY=
 ANTHROPIC_API_KEY=
 ```
 
-### Key Requirements
+### ✅ Key Requirements
 
 - For search/quote/charts, set at least one of:
   - `FINNHUB_API_KEY`
@@ -88,16 +88,16 @@ ANTHROPIC_API_KEY=
 - `ALPHAVANTAGE_API_KEY` is optional and used as extra fallback for candles.
 - `ANTHROPIC_API_KEY` is required only for AI analysis.
 
-## API Overview
+## 🧩 API Overview
 
-### App API Routes
+### 🛠️ App API Routes
 
 - `GET /api/search` -> symbol suggestions
 - `GET /api/stocks/[symbol]` -> quote + profile
 - `GET /api/candles` -> OHLCV candles for chart ranges
 - `POST /api/analysis` -> Claude analysis
 
-### TradingView UDF-Compatible Routes
+### 📡 TradingView UDF-Compatible Routes
 
 - `GET /api/tv/config`
 - `GET /api/tv/search`
@@ -107,7 +107,7 @@ ANTHROPIC_API_KEY=
 
 These routes are available for Charting Library/UDF integration.
 
-## Optional: TradingView Charting Library Assets
+## 📦 Optional: TradingView Charting Library Assets
 
 If you want to use the advanced TradingView Charting Library integration, copy vendor assets into `public/`.
 
@@ -124,7 +124,7 @@ Expected files after setup:
 
 Note: the default chart in the app currently uses `lightweight-charts` and does not require these assets.
 
-## Scripts
+## 🧪 Scripts
 
 ```bash
 npm run dev
@@ -133,6 +133,6 @@ npm run start
 npm run lint
 ```
 
-## Notes
+## ⚠️ Notes
 
 - This project is for educational/informational use and is not financial advice.
