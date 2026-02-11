@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { StockSearch } from '@/components/stock-search';
 import { StockStats } from '@/components/stock-stats';
 import { TradingViewWidget } from '@/components/tradingview-widget';
 import { AIAnalyst } from '@/components/ai-analyst';
+import { WatchlistItem, WatchlistPanel } from '@/components/watchlist-panel';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TrendingUp, Sparkles, BarChart3 } from 'lucide-react';
@@ -15,11 +16,58 @@ interface StockData {
   profile: any;
 }
 
+const WATCHLIST_STORAGE_KEY = 'stock-predictor.watchlist.v1';
+
+function sanitizeWatchlist(items: unknown): WatchlistItem[] {
+  if (!Array.isArray(items)) return [];
+
+  return items
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const row = item as Record<string, unknown>;
+
+      const symbol = String(row.symbol ?? '').trim().toUpperCase();
+      if (!symbol) return null;
+
+      return {
+        symbol,
+        name: String(row.name ?? symbol).trim() || symbol,
+        addedAt: Number(row.addedAt ?? Date.now()),
+      } satisfies WatchlistItem;
+    })
+    .filter((item): item is WatchlistItem => item !== null)
+    .slice(0, 50);
+}
+
 export default function Home() {
   const [stockData, setStockData] = useState<StockData | null>(null);
   const [symbol, setSymbol] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [watchlistReady, setWatchlistReady] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(WATCHLIST_STORAGE_KEY);
+      if (!raw) {
+        setWatchlistReady(true);
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as unknown;
+      setWatchlist(sanitizeWatchlist(parsed));
+    } catch {
+      setWatchlist([]);
+    } finally {
+      setWatchlistReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!watchlistReady) return;
+    localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(watchlist));
+  }, [watchlist, watchlistReady]);
 
   const handleSearch = async (searchSymbol: string) => {
     const cleanedSymbol = (searchSymbol || '').toUpperCase().trim();
@@ -45,6 +93,37 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const activeName = stockData?.profile?.name || symbol;
+
+  const isCurrentInWatchlist = useMemo(() => {
+    if (!symbol) return false;
+    return watchlist.some((item) => item.symbol === symbol);
+  }, [watchlist, symbol]);
+
+  const toggleCurrentWatchlist = () => {
+    if (!symbol) return;
+
+    if (isCurrentInWatchlist) {
+      setWatchlist((prev) => prev.filter((item) => item.symbol !== symbol));
+      return;
+    }
+
+    const nextItem: WatchlistItem = {
+      symbol,
+      name: activeName || symbol,
+      addedAt: Date.now(),
+    };
+
+    setWatchlist((prev) => {
+      const withoutCurrent = prev.filter((item) => item.symbol !== symbol);
+      return [nextItem, ...withoutCurrent].slice(0, 50);
+    });
+  };
+
+  const removeFromWatchlist = (targetSymbol: string) => {
+    setWatchlist((prev) => prev.filter((item) => item.symbol !== targetSymbol));
   };
 
   return (
@@ -77,6 +156,17 @@ export default function Home() {
         {/* Search */}
         <section>
           <StockSearch onSearch={handleSearch} isLoading={isLoading} />
+        </section>
+
+        <section>
+          <WatchlistPanel
+            items={watchlist}
+            activeSymbol={symbol || undefined}
+            activeName={activeName}
+            onToggleActive={symbol ? toggleCurrentWatchlist : undefined}
+            onSelect={handleSearch}
+            onRemove={removeFromWatchlist}
+          />
         </section>
 
         {/* Error */}

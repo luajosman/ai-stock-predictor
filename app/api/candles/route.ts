@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  ProviderAttempt,
+  beginProviderAttempt,
+  createRequestId,
+  recordSkippedProviderAttempt,
+} from "@/lib/api-observability";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const ROUTE_ID = "/api/candles";
 
 type RangeKey = "24H" | "1W" | "1M" | "3M" | "6M" | "1Y" | "5Y";
 
@@ -369,18 +377,37 @@ async function fetchAlphaVantageCandles(
 }
 
 export async function GET(req: NextRequest) {
+  const requestId = createRequestId("candles");
+  const providerAttempts: ProviderAttempt[] = [];
+
   const searchParams = new URL(req.url).searchParams;
   const symbol = (searchParams.get("symbol") ?? "").trim().toUpperCase();
   const range = parseRange(searchParams.get("range"));
 
   if (!symbol) {
-    return NextResponse.json({ error: "Missing symbol" }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: "Missing symbol",
+        meta: {
+          requestId,
+          providerAttempts,
+        },
+      },
+      { status: 400 }
+    );
   }
 
   const cacheKey = `${symbol}|${range}`;
   const cached = cache.get(cacheKey);
   if (cached && cached.expires > Date.now()) {
-    return NextResponse.json(cached.payload);
+    return NextResponse.json({
+      ...cached.payload,
+      meta: {
+        requestId,
+        providerAttempts,
+        cacheHit: true,
+      },
+    });
   }
 
   const to = nowSec();
@@ -389,41 +416,113 @@ export async function GET(req: NextRequest) {
 
   const finnhubKey = process.env.FINNHUB_API_KEY;
   if (finnhubKey) {
+    const completeAttempt = beginProviderAttempt({
+      requestId,
+      route: ROUTE_ID,
+      provider: "finnhub",
+    });
+
     try {
       const payload = await fetchFinnhubCandles(symbol, range, from, to, finnhubKey);
       cache.set(cacheKey, { expires: Date.now() + ttlSeconds(range) * 1000, payload });
-      return NextResponse.json(payload);
+      providerAttempts.push(completeAttempt("ok"));
+      return NextResponse.json({
+        ...payload,
+        meta: {
+          requestId,
+          providerAttempts,
+          cacheHit: false,
+        },
+      });
     } catch (error) {
       providerErrors.finnhub = error instanceof Error ? error.message : "Finnhub failed";
+      providerAttempts.push(completeAttempt("error", error));
     }
   } else {
-    providerErrors.finnhub = "FINNHUB_API_KEY missing";
+    const reason = "FINNHUB_API_KEY missing";
+    providerErrors.finnhub = reason;
+    providerAttempts.push(
+      recordSkippedProviderAttempt({
+        requestId,
+        route: ROUTE_ID,
+        provider: "finnhub",
+        reason,
+      })
+    );
   }
 
   const twelveDataKey = process.env.TWELVEDATA_API_KEY;
   if (twelveDataKey) {
+    const completeAttempt = beginProviderAttempt({
+      requestId,
+      route: ROUTE_ID,
+      provider: "twelvedata",
+    });
+
     try {
       const payload = await fetchTwelveDataCandles(symbol, range, from, to, twelveDataKey);
       cache.set(cacheKey, { expires: Date.now() + ttlSeconds(range) * 1000, payload });
-      return NextResponse.json(payload);
+      providerAttempts.push(completeAttempt("ok"));
+      return NextResponse.json({
+        ...payload,
+        meta: {
+          requestId,
+          providerAttempts,
+          cacheHit: false,
+        },
+      });
     } catch (error) {
       providerErrors.twelvedata = error instanceof Error ? error.message : "Twelve Data failed";
+      providerAttempts.push(completeAttempt("error", error));
     }
   } else {
-    providerErrors.twelvedata = "TWELVEDATA_API_KEY missing";
+    const reason = "TWELVEDATA_API_KEY missing";
+    providerErrors.twelvedata = reason;
+    providerAttempts.push(
+      recordSkippedProviderAttempt({
+        requestId,
+        route: ROUTE_ID,
+        provider: "twelvedata",
+        reason,
+      })
+    );
   }
 
   const alphaKey = process.env.ALPHAVANTAGE_API_KEY;
   if (alphaKey) {
+    const completeAttempt = beginProviderAttempt({
+      requestId,
+      route: ROUTE_ID,
+      provider: "alphavantage",
+    });
+
     try {
       const payload = await fetchAlphaVantageCandles(symbol, range, from, to, alphaKey);
       cache.set(cacheKey, { expires: Date.now() + ttlSeconds(range) * 1000, payload });
-      return NextResponse.json(payload);
+      providerAttempts.push(completeAttempt("ok"));
+      return NextResponse.json({
+        ...payload,
+        meta: {
+          requestId,
+          providerAttempts,
+          cacheHit: false,
+        },
+      });
     } catch (error) {
       providerErrors.alphavantage = error instanceof Error ? error.message : "Alpha Vantage failed";
+      providerAttempts.push(completeAttempt("error", error));
     }
   } else {
-    providerErrors.alphavantage = "ALPHAVANTAGE_API_KEY missing";
+    const reason = "ALPHAVANTAGE_API_KEY missing";
+    providerErrors.alphavantage = reason;
+    providerAttempts.push(
+      recordSkippedProviderAttempt({
+        requestId,
+        route: ROUTE_ID,
+        provider: "alphavantage",
+        reason,
+      })
+    );
   }
 
   return NextResponse.json(
@@ -432,6 +531,11 @@ export async function GET(req: NextRequest) {
       providers: providerErrors,
       symbol,
       range,
+      meta: {
+        requestId,
+        providerAttempts,
+        cacheHit: false,
+      },
     },
     { status: 502 }
   );

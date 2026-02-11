@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  ProviderAttempt,
+  beginProviderAttempt,
+  createRequestId,
+  recordSkippedProviderAttempt,
+} from "@/lib/api-observability";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const ROUTE_ID = "/api/stocks/[symbol]";
 
 type Quote = {
   c: number;
@@ -125,35 +133,93 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: { symbol: string } }
 ) {
+  const requestId = createRequestId("stocks");
+  const providerAttempts: ProviderAttempt[] = [];
+
   const symbol = (params.symbol ?? "").trim().toUpperCase();
   if (!symbol) {
-    return NextResponse.json({ error: "Missing symbol" }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: "Missing symbol",
+        meta: {
+          requestId,
+          providerAttempts,
+        },
+      },
+      { status: 400 }
+    );
   }
 
   const providerErrors: Record<string, string> = {};
 
   const finnhubKey = process.env.FINNHUB_API_KEY;
   if (finnhubKey) {
+    const completeAttempt = beginProviderAttempt({
+      requestId,
+      route: ROUTE_ID,
+      provider: "finnhub",
+    });
+
     try {
       const payload = await fetchFromFinnhub(symbol, finnhubKey);
-      return NextResponse.json(payload);
+      providerAttempts.push(completeAttempt("ok"));
+      return NextResponse.json({
+        ...payload,
+        meta: {
+          requestId,
+          providerAttempts,
+        },
+      });
     } catch (error) {
       providerErrors.finnhub = error instanceof Error ? error.message : "Finnhub request failed";
+      providerAttempts.push(completeAttempt("error", error));
     }
   } else {
-    providerErrors.finnhub = "FINNHUB_API_KEY missing";
+    const reason = "FINNHUB_API_KEY missing";
+    providerErrors.finnhub = reason;
+    providerAttempts.push(
+      recordSkippedProviderAttempt({
+        requestId,
+        route: ROUTE_ID,
+        provider: "finnhub",
+        reason,
+      })
+    );
   }
 
   const twelveDataKey = process.env.TWELVEDATA_API_KEY;
   if (twelveDataKey) {
+    const completeAttempt = beginProviderAttempt({
+      requestId,
+      route: ROUTE_ID,
+      provider: "twelvedata",
+    });
+
     try {
       const payload = await fetchFromTwelveData(symbol, twelveDataKey);
-      return NextResponse.json(payload);
+      providerAttempts.push(completeAttempt("ok"));
+      return NextResponse.json({
+        ...payload,
+        meta: {
+          requestId,
+          providerAttempts,
+        },
+      });
     } catch (error) {
       providerErrors.twelvedata = error instanceof Error ? error.message : "Twelve Data request failed";
+      providerAttempts.push(completeAttempt("error", error));
     }
   } else {
-    providerErrors.twelvedata = "TWELVEDATA_API_KEY missing";
+    const reason = "TWELVEDATA_API_KEY missing";
+    providerErrors.twelvedata = reason;
+    providerAttempts.push(
+      recordSkippedProviderAttempt({
+        requestId,
+        route: ROUTE_ID,
+        provider: "twelvedata",
+        reason,
+      })
+    );
   }
 
   return NextResponse.json(
@@ -161,6 +227,10 @@ export async function GET(
       error: "Unable to fetch stock data from configured providers",
       symbol,
       providers: providerErrors,
+      meta: {
+        requestId,
+        providerAttempts,
+      },
     },
     { status: 502 }
   );

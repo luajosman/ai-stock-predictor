@@ -41,6 +41,24 @@ type CandleResponse = {
   symbol?: string;
   range?: string;
   resolution?: string;
+  error?: string;
+  providers?: Record<string, string>;
+  meta?: {
+    requestId?: string;
+    cacheHit?: boolean;
+    providerAttempts?: Array<{
+      provider: string;
+      status: 'ok' | 'error' | 'skipped';
+      latencyMs: number;
+      error?: string;
+    }>;
+  };
+};
+
+type ChartLoadError = {
+  message: string;
+  providers?: Record<string, string>;
+  requestId?: string;
 };
 
 interface TradingViewChartProps {
@@ -61,6 +79,9 @@ export function TradingViewChart({ symbol, isLoading }: TradingViewChartProps) {
   const [candleResp, setCandleResp] = useState<CandleResponse | null>(null);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
+  const [chartProviderErrors, setChartProviderErrors] = useState<Record<string, string>>({});
+  const [chartRequestId, setChartRequestId] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [chartHeight, setChartHeight] = useState(400);
@@ -107,27 +128,49 @@ export function TradingViewChart({ symbol, isLoading }: TradingViewChartProps) {
     const controller = new AbortController();
     setChartLoading(true);
     setChartError(null);
+    setChartProviderErrors({});
+    setChartRequestId(null);
 
     fetch(`/api/candles?symbol=${encodeURIComponent(symbol)}&range=${range}`, {
       signal: controller.signal,
     })
       .then(async (res) => {
         const json = await res.json();
-        if (!res.ok) throw new Error(json?.error ?? 'Candles fetch failed');
+        if (!res.ok) {
+          throw {
+            message: json?.error ?? 'Candles fetch failed',
+            providers: json?.providers,
+            requestId: json?.meta?.requestId,
+          } satisfies ChartLoadError;
+        }
         return json as CandleResponse;
       })
       .then((json) => {
+        setChartRequestId(json.meta?.requestId ?? null);
+
         if (json.s !== 'ok' || !Array.isArray(json.t) || !Array.isArray(json.c)) {
           setCandleResp(json);
-          setChartError('No chart data available for this range.');
+          setChartProviderErrors(json.providers ?? {});
+          setChartError(json.error ?? 'No chart data available for this range.');
           return;
         }
+
+        setChartProviderErrors({});
         setCandleResp(json);
       })
       .catch((err) => {
         if (!controller.signal.aborted) {
           setCandleResp(null);
-          setChartError(err instanceof Error ? err.message : 'Failed to load chart');
+          if (err && typeof err === 'object' && 'message' in err) {
+            const parsed = err as ChartLoadError;
+            setChartProviderErrors(parsed.providers ?? {});
+            setChartRequestId(parsed.requestId ?? null);
+            setChartError(parsed.message);
+          } else if (err instanceof Error) {
+            setChartError(err.message);
+          } else {
+            setChartError('Failed to load chart');
+          }
         }
       })
       .finally(() => {
@@ -135,7 +178,7 @@ export function TradingViewChart({ symbol, isLoading }: TradingViewChartProps) {
       });
 
     return () => controller.abort();
-  }, [symbol, range]);
+  }, [symbol, range, reloadTick]);
 
   const lineData = useMemo<LineData[]>(() => {
     if (!candleResp || candleResp.s !== 'ok' || !candleResp.t || !candleResp.c) return [];
@@ -281,6 +324,13 @@ export function TradingViewChart({ symbol, isLoading }: TradingViewChartProps) {
   }
 
   const hasAnyData = chartType === 'candlestick' ? candleData.length > 0 : lineData.length > 0;
+  const hasProviderErrors = Object.keys(chartProviderErrors).length > 0;
+
+  const guidance = [
+    'Verify the symbol and exchange format (examples: AAPL, SAP.DE, 7203.T).',
+    'Try a broader range like 1M or 1Y to include more history.',
+    'Use Retry after a few seconds when providers are rate-limited.',
+  ];
 
   if (chartError || !hasAnyData) {
     return (
@@ -292,8 +342,51 @@ export function TradingViewChart({ symbol, isLoading }: TradingViewChartProps) {
             {isFullscreen ? 'Exit' : 'Fullscreen'}
           </Button>
         </CardHeader>
-        <CardContent className="h-[400px] flex items-center justify-center">
-          <p className="text-muted-foreground">{chartError ?? 'No data available'}</p>
+        <CardContent className="min-h-[400px] flex items-center justify-center">
+          <div className="max-w-2xl w-full space-y-4 text-sm">
+            <div className="space-y-1">
+              <p className="font-semibold text-base">Unable to render chart data</p>
+              <p className="text-muted-foreground">{chartError ?? 'No data available for this range yet.'}</p>
+            </div>
+
+            {hasProviderErrors && (
+              <div className="rounded-md border bg-muted/40 p-3">
+                <p className="font-medium mb-2">Provider status</p>
+                <ul className="space-y-1 text-muted-foreground">
+                  {Object.entries(chartProviderErrors).map(([provider, msg]) => (
+                    <li key={provider}>
+                      <span className="font-medium text-foreground">{provider}</span>: {msg}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="rounded-md border border-dashed p-3">
+              <p className="font-medium mb-2">How to fix quickly</p>
+              <ul className="space-y-1 text-muted-foreground">
+                {guidance.map((item) => (
+                  <li key={item}>- {item}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={() => setReloadTick((v) => v + 1)}>
+                Retry
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setRange('1M')}>
+                Try 1M
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setRange('1Y')}>
+                Try 1Y
+              </Button>
+            </div>
+
+            {chartRequestId && (
+              <p className="text-xs text-muted-foreground">Request ID: {chartRequestId}</p>
+            )}
+          </div>
         </CardContent>
       </Card>
     );
